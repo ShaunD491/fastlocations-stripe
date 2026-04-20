@@ -11,10 +11,10 @@ app.use(cors());
 
 // TODO: Replace these placeholders with the actual "Price IDs" from your Stripe Dashboard
 const PRICE_IDS = {
-    basic: 'price_1TMtgQGEPKXHk2DWkwlX0EP4',
-    small: 'price_1TNBchGEPKXHk2DWh73U5xHw',
-    medium: 'price_1TNG5jGEPKXHk2DWT64Y7Fgp',
-    large: 'price_1TNG3JGEPKXHk2DWwOhF2G58'
+     basic: 'price_1TOKRCGEPKXHk2DWSwHFvTRN',
+    small: 'price_1TOKahGEPKXHk2DWiU0jYNYA',
+    medium: 'price_1TOKcDGEPKXHk2DWNmEyXZNN',
+    large: 'price_1TOKeUGEPKXHk2DWXYQeKzNP'
 };
 app.post('/create-checkout-session', async (req, res) => {
     try {
