@@ -8,10 +8,10 @@ app.use(express.json());
 app.use(cors());
 
 const PRICE_IDS = {
-    basic: 'price_1TOKRCGEPKXHk2DWSwHFvTRN',
-    small: 'price_1TOKahGEPKXHk2DWiU0jYNYA',
-    medium: 'price_1TOKcDGEPKXHk2DWNmEyXZNN',
-    large: 'price_1TOKeUGEPKXHk2DWXYQeKzNP'
+    basic: 'price_1TRcyB7kCFBD2fZagxnSCRSr',
+    small: 'price_1TRcy67kCFBD2fZalpRnsxfz',
+    medium: 'price_1TRcy17kCFBD2fZaH2KaeMsY',
+    large: 'price_1TRcxx7kCFBD2fZaRYII5PbD'
 };
 
 app.post('/create-checkout-session', async (req, res) => {
