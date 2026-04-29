@@ -29,7 +29,10 @@ app.post('/create-checkout-session', async (req, res) => {
             postalCode,
             country,
             edCategory,
-            planName
+            planName,
+            consent_listings,
+            consent_timestamp,
+            consent_text
         } = req.body;
 
         const priceId = PRICE_IDS[plan];
@@ -49,7 +52,10 @@ app.post('/create-checkout-session', async (req, res) => {
             Postal_Code:      postalCode     || 'N/A',
             Country:          country        || 'N/A',
             ED_Category:      edCategory,
-            Plan_Selected:    planName || plan.toUpperCase()
+            Plan_Selected:    planName || plan.toUpperCase(),
+            consent_listings: consent_listings,
+            consent_timestamp: consent_timestamp,
+            consent_text: consent_text,
         };
 
         // Create the Stripe Checkout Session
