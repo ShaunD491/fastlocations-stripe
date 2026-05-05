@@ -30,11 +30,11 @@ app.post('/webhooks/v1', express.raw({ type: 'application/json' }), (req, res) =
 });
 
 // ─── V2 Webhook (Thin / dynamic-wonder) ──────────────────────────────────────
-app.post('/webhooks/v2', express.raw({ type: 'application/json' }), (req, res) => {
+app.post('/webhooks/v2', express.raw({ type: 'application/json' }), async (req, res) => {
     const sig = req.headers['stripe-signature'];
     let event;
     try {
-        event = stripe.webhooks.constructEvent(
+        event = await stripe.parseEventNotification(
             req.body,
             sig,
             process.env.STRIPE_V2_WEBHOOK_SECRET
