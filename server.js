@@ -34,7 +34,7 @@ app.post('/webhooks/v2', express.raw({ type: 'application/json' }), (req, res) =
     const sig = req.headers['stripe-signature'];
     let event;
     try {
-        event = stripe.parseThinEvent(
+        event = stripe.webhooks.constructEvent(
             req.body,
             sig,
             process.env.STRIPE_WEBHOOK_SECRET_V2
