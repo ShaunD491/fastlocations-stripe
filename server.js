@@ -19,7 +19,7 @@ app.post('/webhooks/v1', express.raw({ type: 'application/json' }), (req, res) =
         event = stripe.webhooks.constructEvent(
             req.body,
             sig,
-            process.env.STRIPE_WEBHOOK_SECRET_V1
+            process.env.STRIPE_V1_WEBHOOK_SECRET
         );
     } catch (err) {
         console.error('V1 webhook signature verification failed:', err.message);
@@ -37,7 +37,7 @@ app.post('/webhooks/v2', express.raw({ type: 'application/json' }), (req, res) =
         event = stripe.webhooks.constructEvent(
             req.body,
             sig,
-            process.env.STRIPE_WEBHOOK_SECRET_V2
+            process.env.STRIPE_V2_WEBHOOK_SECRET
         );
     } catch (err) {
         console.error('V2 webhook signature verification failed:', err.message);
