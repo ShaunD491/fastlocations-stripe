@@ -99,6 +99,16 @@ app.post('/create-checkout-session', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+const { scoreLocations } = require('./locationScoring');
+
+app.post('/api/score-locations', express.json({ limit: '5mb' }), (req, res) => {
+  try {
+    const { projectCriteria, candidates } = req.body;
+    res.json(scoreLocations(projectCriteria, candidates));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 app.listen(PORT, () => {
     console.log(`✅ FastLocations Backend running on port ${PORT}`);
 });
