@@ -6,32 +6,27 @@ app.use(cors());
 
 // ─── Plans ────────────────────────────────────────────────────────────────────
 // Lineup as of Oct 2026: Level 1 ('small') and Level 2 ('medium') retired; 'large' is now Ai+Plus.
-// Each plan charges its Stripe product's *default price*, so price changes (including the
-// Jan 1, 2027 increases made by swap-price.js) need no redeploy here.
-//   basic  - Basic Map Listing product ($995/yr; old $795 price was price_1TRcyB7kCFBD2fZagxnSCRSr)
-//   aiplus - Ai+Plus product (formerly Level 3), located via its $2,395 price
-const PLAN_SOURCES = {
-    basic:  { product: process.env.STRIPE_PRODUCT_BASIC || 'prod_VMZTrsXXIQXUK6' },
-    aiplus: { product: process.env.STRIPE_PRODUCT_AIPLUS, seedPrice: 'price_1TRcxx7kCFBD2fZaRYII5PbD' }
+// Each plan charges the default price of its current Stripe product. On PRICE_INCREASE_AT the
+// plans switch to their 2027 products (Ai+Plus $2,395 -> $2,995, Basic $995 -> $1,295);
+// subscribe.html reads /plans, so the page follows automatically. Existing subscriptions are untouched.
+const PRICE_INCREASE_AT = new Date(process.env.PRICE_INCREASE_AT || '2027-01-01T00:00:00-05:00');
+const PLAN_PRODUCTS = {
+    basic:  { current: 'prod_VMZTrsXXIQXUK6', from2027: 'prod_VMZd29AefF9f6S' },  // Basic Map Listing (+ 2027)
+    aiplus: { current: 'prod_UQTvmLzMFKcVDl', from2027: 'prod_VMZePDnI2wx6Da' }   // AI+Plus (+ 2027)
 };
-PLAN_SOURCES.large = PLAN_SOURCES.aiplus;   // key subscribe.html sends
+PLAN_PRODUCTS.large = PLAN_PRODUCTS.aiplus;   // key subscribe.html sends
 
-// Resolve plan -> current default price, cached briefly to avoid a Stripe lookup per page view.
+// Resolve plan -> its product's default price, cached briefly to avoid a Stripe lookup per page view.
 const PRICE_CACHE_MS = 5 * 60 * 1000;
 const priceCache = {};
 
 async function resolvePrice(plan) {
-    const source = PLAN_SOURCES[plan];
-    if (!source) return null;
+    const products = PLAN_PRODUCTS[plan];
+    if (!products) return null;
+    const productId = Date.now() >= PRICE_INCREASE_AT.getTime() ? products.from2027 : products.current;
 
-    const cached = priceCache[plan];
+    const cached = priceCache[productId];
     if (cached && Date.now() - cached.at < PRICE_CACHE_MS) return cached.price;
-
-    let productId = source.product;
-    if (!productId) {
-        const seed = await stripe.prices.retrieve(source.seedPrice);
-        productId = typeof seed.product === 'string' ? seed.product : seed.product.id;
-    }
 
     const product = await stripe.products.retrieve(productId, { expand: ['default_price'] });
     const price = product.default_price;
@@ -39,7 +34,7 @@ async function resolvePrice(plan) {
         throw new Error(`Product ${productId} has no active recurring default price`);
     }
 
-    priceCache[plan] = { price, at: Date.now() };
+    priceCache[productId] = { price, at: Date.now() };
     return price;
 }
 
