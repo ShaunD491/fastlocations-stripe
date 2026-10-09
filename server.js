@@ -38,8 +38,66 @@ async function resolvePrice(plan) {
     return price;
 }
 
+// ─── EDO access codes ─────────────────────────────────────────────────────────
+// A paid subscribe.html checkout creates the subscriber on the website (EDO/api.php), which issues the
+// access code and emails the welcome message. Status changes (cancel, past due) are relayed the same way.
+// Needs env EDO_API_SECRET (same value as 'subscriber_secret' in EDO/private/config.php on the website).
+const EDO_API_URL = process.env.EDO_API_URL || 'https://www.fastlocations.ai/EDO/api.php';
+
+async function edoCall(action, payload) {
+    if (!process.env.EDO_API_SECRET) throw new Error('EDO_API_SECRET is not set');
+    const r = await fetch(`${EDO_API_URL}?action=${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: process.env.EDO_API_SECRET, ...payload }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.ok) throw new Error(`EDO ${action} failed: HTTP ${r.status} ${data.error || ''}`);
+    return data;
+}
+
+function planKey(planName) {
+    return /ai/i.test(planName || '') ? 'aiplus' : /basic/i.test(planName || '') ? 'basic' : (planName || '').toLowerCase();
+}
+
+// Builds the subscriber_activate payload from a completed subscription checkout session.
+function subscriberFromSession(session, extra) {
+    const m = session.metadata || {};
+    return {
+        subscription_id: typeof session.subscription === 'string' ? session.subscription : (session.subscription && session.subscription.id),
+        customer_id: typeof session.customer === 'string' ? session.customer : '',
+        email: m.Email || (session.customer_details && session.customer_details.email) || session.customer_email || '',
+        name: m.Subscriber_Name || (session.customer_details && session.customer_details.name) || '',
+        organization: m.Organization || '',
+        state: m.State_Province || '',
+        country: m.Country || '',
+        plan: planKey(m.Plan_Selected),
+        ...extra,
+    };
+}
+
+async function handleStripeEvent(event) {
+    switch (event.type) {
+        case 'checkout.session.completed': {
+            const session = event.data.object;
+            if (session.mode !== 'subscription' || !session.subscription) return;
+            await edoCall('subscriber_activate', subscriberFromSession(session));
+            return;
+        }
+        case 'customer.subscription.updated':
+        case 'customer.subscription.deleted': {
+            const sub = event.data.object;
+            await edoCall('subscriber_status', { subscription_id: sub.id, status: event.type.endsWith('deleted') ? 'canceled' : sub.status });
+            return;
+        }
+        default:
+            return;
+    }
+}
+
 // ─── V1 Webhook (Snapshot / charming-spark) ───────────────────────────────────
-app.post('/webhooks/v1', express.raw({ type: 'application/json' }), (req, res) => {
+// Subscribe this endpoint to: checkout.session.completed, customer.subscription.updated, customer.subscription.deleted.
+app.post('/webhooks/v1', express.raw({ type: 'application/json' }), async (req, res) => {
     const sig = req.headers['stripe-signature'];
     let event;
     try {
@@ -53,6 +111,13 @@ app.post('/webhooks/v1', express.raw({ type: 'application/json' }), (req, res) =
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
     console.log('V1 event received:', event.type);
+    try {
+        await handleStripeEvent(event);
+    } catch (err) {
+        // 500 makes Stripe retry; the website side is idempotent per subscription id.
+        console.error('EDO sync failed for', event.type, event.id, '-', err.message);
+        return res.status(500).json({ error: err.message });
+    }
     res.status(200).json({ received: true });
 });
 
