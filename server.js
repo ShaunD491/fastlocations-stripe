@@ -6,10 +6,10 @@ app.use(cors());
 
 // ─── Plans ────────────────────────────────────────────────────────────────────
 // Lineup as of Oct 2026: Level 1 ('small') and Level 2 ('medium') retired; 'large' is now Ai+Plus.
-// Each plan charges the default price of its current Stripe product. On PRICE_INCREASE_AT the
-// plans switch to their 2027 products (Ai+Plus $2,395 -> $2,995, Basic $995 -> $1,295);
+// Each plan charges the default price of its current Stripe product. On PRICE_INCREASE_AT (Jan 18 2027) the
+// plans switch to their 2027 products (Ai+Plus $2,695 -> $2,995, Basic $995 -> $1,295);
 // subscribe.html reads /plans, so the page follows automatically. Existing subscriptions are untouched.
-const PRICE_INCREASE_AT = new Date(process.env.PRICE_INCREASE_AT || '2027-01-01T00:00:00-05:00');
+const PRICE_INCREASE_AT = new Date(process.env.PRICE_INCREASE_AT || '2027-01-18T00:00:00-05:00');
 const PLAN_PRODUCTS = {
     basic:  { current: 'prod_VMZTrsXXIQXUK6', from2027: 'prod_VMZd29AefF9f6S' },  // Basic Map Listing (+ 2027)
     aiplus: { current: 'prod_UQTvmLzMFKcVDl', from2027: 'prod_VMZePDnI2wx6Da' }   // AI+Plus (+ 2027)
