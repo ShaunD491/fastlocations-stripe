@@ -76,18 +76,33 @@ function subscriberFromSession(session, extra) {
     };
 }
 
+// The paid-through date the EDO Portal shows under Account status ("renews on" / "expires on").
+// Newer Stripe API versions carry the period on the subscription item, older ones on the subscription itself.
+function subscriptionPeriod(sub) {
+    const item = sub && sub.items && sub.items.data && sub.items.data[0];
+    const end = (item && item.current_period_end) || (sub && sub.current_period_end) || (sub && sub.cancel_at) || null;
+    const out = { cancel_at_period_end: !!(sub && (sub.cancel_at_period_end || sub.cancel_at)) };
+    if (end) out.period_end = end;
+    return out;
+}
+
 async function handleStripeEvent(event) {
     switch (event.type) {
         case 'checkout.session.completed': {
             const session = event.data.object;
             if (session.mode !== 'subscription' || !session.subscription) return;
-            await edoCall('subscriber_activate', subscriberFromSession(session));
+            let period = {};
+            try {   // the session only names the subscription; its period needs a lookup. Never hold up the activation for it.
+                const sub = typeof session.subscription === 'string' ? await stripe.subscriptions.retrieve(session.subscription) : session.subscription;
+                period = subscriptionPeriod(sub);
+            } catch (err) { console.error('Could not read the subscription period for', session.subscription, '-', err.message); }
+            await edoCall('subscriber_activate', subscriberFromSession(session, period));
             return;
         }
         case 'customer.subscription.updated':
         case 'customer.subscription.deleted': {
             const sub = event.data.object;
-            await edoCall('subscriber_status', { subscription_id: sub.id, status: event.type.endsWith('deleted') ? 'canceled' : sub.status });
+            await edoCall('subscriber_status', { subscription_id: sub.id, status: event.type.endsWith('deleted') ? 'canceled' : sub.status, ...subscriptionPeriod(sub) });
             return;
         }
         default:

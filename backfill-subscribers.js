@@ -5,6 +5,9 @@
 //   railway run -s fastlocations-stripe -- node backfill-subscribers.js                dry run: only prints what would be sent
 //   railway run -s fastlocations-stripe -- node backfill-subscribers.js --apply        really sends it
 //   ... --include-canceled   also record cancelled subscriptions (they will show as lapsed)
+//   railway run -s fastlocations-stripe -- node backfill-subscribers.js --periods [--apply]
+//        only refreshes the status and paid-through date of subscribers the website already has
+//        (for the EDO Portal's Account status panel); adds nobody and emails nobody
 //
 // Needs STRIPE_SECRET_KEY and EDO_API_SECRET (Railway supplies both). Safe to run again: the website
 // ignores a subscription id it already has. The website's api.php must be uploaded first.
@@ -14,6 +17,16 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY, process.env.STRI
 
 const APPLY = process.argv.includes('--apply');
 const INCLUDE_CANCELED = process.argv.includes('--include-canceled');
+const PERIODS = process.argv.includes('--periods');
+
+// Same as subscriptionPeriod() in server.js: the paid-through date and whether it is set to end then.
+function subscriptionPeriod(sub) {
+    const item = sub.items && sub.items.data && sub.items.data[0];
+    const end = (item && item.current_period_end) || sub.current_period_end || sub.cancel_at || null;
+    const out = { cancel_at_period_end: !!(sub.cancel_at_period_end || sub.cancel_at) };
+    if (end) out.period_end = end;
+    return out;
+}
 const EDO_API_URL = process.env.EDO_API_URL || 'https://www.fastlocations.ai/EDO/api.php';
 
 // Stripe products -> plan keys used on the website (see PLAN_PRODUCTS in server.js). The old $795 Basic product is still in use.
@@ -48,6 +61,7 @@ function buildPayload(sub) {
         state: m.State_Province || (cust.address && cust.address.state) || '',
         country: m.Country || (cust.address && cust.address.country) || '',
         plan: PRODUCT_PLAN[product] || (/ai/i.test(m.Plan_Selected || '') ? 'aiplus' : /basic/i.test(m.Plan_Selected || '') ? 'basic' : ''),
+        ...subscriptionPeriod(sub),
         notify: false,
     };
 }
@@ -60,6 +74,23 @@ function buildPayload(sub) {
         if (wanted.has(sub.status)) rows.push(sub);
     }
     console.log(`${APPLY ? 'APPLY' : 'DRY RUN'}: ${rows.length} subscription(s) to import (${[...wanted].join(', ')}). No email is sent either way.\n`);
+
+    if (PERIODS) {   // status + paid-through date only, for subscribers already on the website
+        let done = 0, unknown = 0, failed = 0;
+        for (const sub of rows) {
+            const p = subscriptionPeriod(sub);
+            const status = ['canceled', 'unpaid', 'incomplete_expired'].includes(sub.status) ? 'canceled' : sub.status;
+            console.log(`${sub.id}  ${sub.status.padEnd(9)} paid through ${p.period_end ? new Date(p.period_end * 1000).toISOString().slice(0, 10) : '(unknown)'}${p.cancel_at_period_end ? '  (set to end then)' : ''}`);
+            if (!APPLY) continue;
+            try {
+                const r = await edoCall('subscriber_status', { subscription_id: sub.id, status, ...p });
+                if (r.unknown) unknown++; else done++;
+            } catch (e) { failed++; console.log('   FAILED:', e.message); }
+            await new Promise(r => setTimeout(r, 150));
+        }
+        console.log(APPLY ? `\nDone. Updated ${done}, ${unknown} not on the website (run without --periods to import them), ${failed} failed.` : '\nNothing was sent. Re-run with --periods --apply to update the website.');
+        return;
+    }
 
     const tally = { sent: 0, existing: 0, exact: 0, review: 0, failed: 0 }, review = [];
     for (const sub of rows) {
